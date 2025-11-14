@@ -26,6 +26,18 @@ def load_mesh(mesh):
 
     return vtx_pos, pos_idx, vtx_uv, uv_idx, texture_data
 
+# def save_mesh(mesh, texture_data):
+#     # This part is correct: create a material that holds the texture image.
+#     material = trimesh.visual.texture.SimpleMaterial(image=texture_data)
+    
+#     # Corrected line: Create visuals linking the UVs to the material.
+#     texture_visuals = trimesh.visual.TextureVisuals(uv=mesh.visual.uv, material=material)
+    
+#     # This correctly assigns the fixed visuals to the mesh.
+#     mesh.visual = texture_visuals
+    
+#     # The function now returns a mesh with the texture properly attached.
+#     return mesh
 
 def save_mesh(mesh, texture_data):
     material = trimesh.visual.texture.SimpleMaterial(image=texture_data, diffuse=(255, 255, 255))
