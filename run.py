@@ -13,7 +13,7 @@ image_path = "/home/fai/workspace/adam/Hunyuan3D-Omni/assets/canon_views/332/910
 
 dataset_path = "/home/fai/workspace/jhkim/vco_train_vol/dataset/images_od/train"
 
-def image_gen():
+def image_gen(image_path=image_path, name="mesh"):
     pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained('tencent/Hunyuan3D-2')
     paint_pipeline = Hunyuan3DPaintPipeline.from_pretrained('tencent/Hunyuan3D-2')
 
@@ -25,7 +25,7 @@ def image_gen():
     end_time = time.time()
     print(f"Painting took {end_time - start_time:.2f} seconds")
 
-    mesh_path = "output/mesh.glb"
+    mesh_path = f"output/{name}.glb"
     os.makedirs(os.path.dirname(mesh_path), exist_ok=True)
     mesh.export(mesh_path, file_type='glb')
 
@@ -84,6 +84,7 @@ def images_gen(images=None, remove_bg=False, name="mesh"):
     print(f"Painting took {time.time() - start_time:.2f} seconds")
 
     mesh_path = f"output/{name}.glb"
+    os.makedirs(os.path.dirname(mesh_path), exist_ok=True)
     mesh.export(mesh_path)
 
 def dataset_gen(num_samples=10):
@@ -104,8 +105,10 @@ def dataset_gen(num_samples=10):
                 images["back"] = os.path.join(dataset_path, asset_dir, img_file)
         
         print(f"Processing asset: {asset_dir}")
-        images_gen(images, name=asset_dir)
+        images_gen(images, name=f"{asset_dir}/mv")
+        image_gen(images["front"], name=f"{asset_dir}/sv")
 
 
 if __name__ == '__main__':
-    images_gen()
+    # images_gen()
+    dataset_gen()
