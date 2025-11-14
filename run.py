@@ -13,10 +13,7 @@ image_path = "/home/fai/workspace/adam/Hunyuan3D-Omni/assets/canon_views/332/910
 
 dataset_path = "/home/fai/workspace/jhkim/vco_train_vol/dataset/images_od/train"
 
-def image_gen(image_path=image_path, name="mesh"):
-    pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained('tencent/Hunyuan3D-2')
-    paint_pipeline = Hunyuan3DPaintPipeline.from_pretrained('tencent/Hunyuan3D-2')
-
+def image_gen(image_path=image_path, name="mesh", pipeline=None, paint_pipeline=None):
     start_time = time.time()
     mesh = pipeline(image=image_path)[0]
     print(f"Shape generation took {time.time() - start_time:.2f} seconds")
@@ -44,7 +41,7 @@ def texture():
     os.makedirs(os.path.dirname(mesh_path), exist_ok=True)
     mesh.export(mesh_path, file_type='glb')
 
-def images_gen(images=None, remove_bg=False, name="mesh"):
+def images_gen(images=None, remove_bg=False, name="mesh", pipeline=None, paint_pipeline=None):
     from PIL import Image
 
     if images is None:
@@ -61,13 +58,6 @@ def images_gen(images=None, remove_bg=False, name="mesh"):
             image = rembg(image)
         images[key] = image
 
-    pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(
-        'tencent/Hunyuan3D-2mv',
-        subfolder='hunyuan3d-dit-v2-mv',
-        variant='fp16'
-    )
-    pipeline_texgen = Hunyuan3DPaintPipeline.from_pretrained('tencent/Hunyuan3D-2')
-
     start_time = time.time()
     mesh = pipeline(
         image=images,
@@ -80,22 +70,31 @@ def images_gen(images=None, remove_bg=False, name="mesh"):
     print(f"Shape generation took {time.time() - start_time:.2f} seconds")
     start_time = time.time()
 
-    mesh = pipeline_texgen(mesh, image=images["front"])
+    mesh = paint_pipeline(mesh, image=images["front"])
     print(f"Painting took {time.time() - start_time:.2f} seconds")
 
     mesh_path = f"output/{name}.glb"
     os.makedirs(os.path.dirname(mesh_path), exist_ok=True)
     mesh.export(mesh_path)
 
-def dataset_gen(num_samples=10):
+def dataset_gen(num_samples=10, type="sv"):
     assets = os.listdir(dataset_path)[:num_samples]
-    # Iterate over sampled assets in the dataset directory
+
+    if type == "sv":
+        pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained('tencent/Hunyuan3D-2')
+        paint_pipeline = Hunyuan3DPaintPipeline.from_pretrained('tencent/Hunyuan3D-2')
+    elif type == "mv":
+        pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(
+            'tencent/Hunyuan3D-2mv',
+            subfolder='hunyuan3d-dit-v2-mv',
+            variant='fp16'
+        )
+        paint_pipeline = Hunyuan3DPaintPipeline.from_pretrained('tencent/Hunyuan3D-2')
+    
     for asset_dir in tqdm(assets):
         if not os.path.isdir(os.path.join(dataset_path, asset_dir)):
             continue
         images = {}
-        # Iterate over the images in the asset directory; 
-            # front image cotains: 1_5_TC_L; left image contains: 1_5_RW_L; back image contains: 0_5_TC_L
         for img_file in os.listdir(os.path.join(dataset_path, asset_dir)):
             if "1_5_TC_L" in img_file:
                 images["front"] = os.path.join(dataset_path, asset_dir, img_file)
@@ -105,10 +104,20 @@ def dataset_gen(num_samples=10):
                 images["back"] = os.path.join(dataset_path, asset_dir, img_file)
         
         print(f"Processing asset: {asset_dir}")
-        images_gen(images, name=f"{asset_dir}/mv")
-        image_gen(images["front"], name=f"{asset_dir}/sv")
+        if type == "sv" and "front" in images:
+            image_gen(images["front"], name=f"{asset_dir}/sv", pipeline=pipeline, paint_pipeline=paint_pipeline)
+        elif type == "mv":
+            images_gen(images, name=f"{asset_dir}/mv", pipeline=pipeline, paint_pipeline=paint_pipeline)
+
+    
+    # relesase GPU memory
+    pipeline.to("cpu")
+    paint_pipeline.to("cpu")
+    del pipeline
+    del paint_pipeline
+    torch.cuda.empty_cache()
 
 
 if __name__ == '__main__':
-    # images_gen()
     dataset_gen()
+    dataset_gen(type="mv")
