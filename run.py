@@ -12,6 +12,8 @@ from hy3dgen.rembg import BackgroundRemover
 image_path = "/home/fai/workspace/adam/Hunyuan3D-Omni/assets/canon_views/332/910_1_5_TC_L.jpg"
 
 dataset_path = "/home/fai/workspace/jhkim/vco_train_vol/dataset/images_od/train"
+dataset_path = "/home/fai/workspace/adam/SinSR/restored_output"
+output_path = "restored_output"
 
 def image_gen(image_path=image_path, name="mesh", pipeline=None, paint_pipeline=None):
     start_time = time.time()
@@ -22,7 +24,7 @@ def image_gen(image_path=image_path, name="mesh", pipeline=None, paint_pipeline=
     end_time = time.time()
     print(f"Painting took {end_time - start_time:.2f} seconds")
 
-    mesh_path = f"output/{name}.glb"
+    mesh_path = f"{output_path}/{name}.glb"
     os.makedirs(os.path.dirname(mesh_path), exist_ok=True)
     mesh.export(mesh_path, file_type='glb')
 
@@ -73,12 +75,13 @@ def images_gen(images=None, remove_bg=False, name="mesh", pipeline=None, paint_p
     mesh = paint_pipeline(mesh, image=images["front"])
     print(f"Painting took {time.time() - start_time:.2f} seconds")
 
-    mesh_path = f"output/{name}.glb"
+    mesh_path = f"{output_path}/{name}.glb"
     os.makedirs(os.path.dirname(mesh_path), exist_ok=True)
     mesh.export(mesh_path)
 
 def dataset_gen(num_samples=10, type="sv"):
     assets = os.listdir(dataset_path)[:num_samples]
+    errors = []
 
     if type == "sv":
         pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained('tencent/Hunyuan3D-2')
@@ -104,18 +107,26 @@ def dataset_gen(num_samples=10, type="sv"):
                 images["back"] = os.path.join(dataset_path, asset_dir, img_file)
         
         print(f"Processing asset: {asset_dir}")
-        if type == "sv" and "front" in images:
-            image_gen(images["front"], name=f"{asset_dir}/sv", pipeline=pipeline, paint_pipeline=paint_pipeline)
-        elif type == "mv":
-            images_gen(images, name=f"{asset_dir}/mv", pipeline=pipeline, paint_pipeline=paint_pipeline)
+        try:
+            if type == "sv" and "front" in images:
+                image_gen(images["front"], name=f"{asset_dir}/sv", pipeline=pipeline, paint_pipeline=paint_pipeline)
+            elif type == "mv":
+                images_gen(images, name=f"{asset_dir}/mv", pipeline=pipeline, paint_pipeline=paint_pipeline)
+        except Exception as e:
+            print(f"Error {asset_dir}: {e}")
+            errors.append((asset_dir, str(e)))
+            continue
 
     
     # relesase GPU memory
-    pipeline.to("cpu")
-    paint_pipeline.to("cpu")
     del pipeline
     del paint_pipeline
     torch.cuda.empty_cache()
+    torch.cuda.synchronize()
+    import gc
+    gc.collect()
+
+    print(f"Errors: {len(errors)} / {num_samples}")
 
 
 if __name__ == '__main__':
